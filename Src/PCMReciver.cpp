@@ -1,15 +1,13 @@
 
-#include <array>
+#include "../include/PCMReciver.hpp"
+#include "boost/asio/buffer.hpp"
 #include <cstdint>
-#include <memory>
 #include <stdint.h>
 #include <vector>
-#include "../include/PCMReciver.hpp"
 
-PCMReceiver::PCMReceiver(net::io_context& io, uint16_t localPort)
- : socket_(io, udp::endpoint(udp::v4(), localPort))
-{
-  accum_.reserve(frameSizeBytes * 2); // allow some headroom
+PCMReceiver::PCMReceiver(net::io_context &io, uint16_t localPort)
+    : socket_(io, udp::endpoint(udp::v4(), localPort)) {
+
 }
 
 void PCMReceiver::GetNextFrameasync(FrameHandler handler) {
@@ -19,32 +17,41 @@ void PCMReceiver::GetNextFrameasync(FrameHandler handler) {
   doReceive();
 }
 
-void PCMReceiver::doReceive(){
-  auto buf = std::make_shared<std::array<uint8_t, 2048>>();
+void PCMReceiver::doReceive() {
 
-  socket_.async_receive_from(boost::asio::buffer(*buf),
-  senderEndpoint_,[this,buf](auto ec,std::size_t bytes){
-      if(ec){
-        pendingHandler_(ec ,{});
-        return;
-      }
-      //insert at the end the  amount of bytes recived
-      accum_.insert(accum_.end(),buf->data(),buf->data()+bytes);
-      
-      if(accum_.size()< frameSizeBytes){
-        doReceive();
-        return;
-      }
-        
-      std::vector<uint8_t> frame(accum_.begin(),accum_.begin()+frameSizeBytes);
+  // 1) Allocate space for the next incoming datagram:
+  auto bufs = sbuf_.prepare(frameSizeBytes);
 
-      accum_.erase(accum_.begin(),
-                   accum_.begin() + frameSizeBytes);
+  // 2) Kick off the async receive into that writable region:
+  socket_.async_receive_from(
+      bufs, // <-- mutable-buffer-sequence
+      senderEndpoint_,
+      [this](boost::system::error_code ec, std::size_t bytesReceived) {
+        if (ec) {
+          pendingHandler_(ec, {});
+          return;
+        }
 
-      // Deliver the frame
-      pendingHandler_({}, std::move(frame));
-  });
+        // 3) Make those bytes part of the readable area:
+        sbuf_.commit(bytesReceived);
+
+        // 4) If we still don’t have a full “frame” yet, keep reading:
+        if (sbuf_.size() < frameSizeBytes) {
+          doReceive();
+          return;
+        }
+
+        // 5) Pull one frame out:
+        std::vector<uint8_t> frame(frameSizeBytes);
+        boost::asio::buffer_copy(
+            boost::asio::buffer(frame), // dest = your vector’s mutable_buffer
+            sbuf_.data()                // src  = streambuf’s readable data
+        );
+        sbuf_.consume(frameSizeBytes);
+
+        // 6) Hand it back:
+        pendingHandler_({}, std::move(frame));
+      });
 }
 
-    static constexpr size_t frameSizeBytes = 960 * 2;
-
+static constexpr size_t frameSizeBytes = 960 * 2;

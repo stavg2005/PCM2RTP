@@ -1,4 +1,5 @@
 #pragma once
+#include "boost/asio/streambuf.hpp"
 #include <boost/asio.hpp>
 #include <vector>
 #include <functional>
@@ -24,6 +25,6 @@ private:
 
   boost::asio::ip::udp::socket      socket_;
   boost::asio::ip::udp::endpoint    senderEndpoint_;
-  std::vector<uint8_t>              accum_;
+  boost::asio::streambuf            sbuf_;
   FrameHandler                      pendingHandler_;
 };

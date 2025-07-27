@@ -16,7 +16,7 @@ int main() {
           }
           std::cout << "Async frame " << count++ << ": " << frame.size()
                     << " bytes\n";
-          if (count < 100)
+          
             requestNext();
         });
   };
