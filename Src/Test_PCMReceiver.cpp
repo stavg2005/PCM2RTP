@@ -1,11 +1,12 @@
 #include "../include/PCMReciver.hpp"
 #include <iostream>
 
+
 int main() {
   boost::asio::io_context io;
   PCMReceiver recv(io, 5005);
 
-  int count = 0;
+  int count = 1;
   std::function<void()> requestNext;
   requestNext = [&]() {
     recv.GetNextFrameasync(
