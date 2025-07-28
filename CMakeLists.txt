@@ -1,7 +1,7 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.27)
 project(RTP-BUILDER)
-
-set(CMAKE_CXX_STANDARD 17)
+include_directories(${CMAKE_SOURCE_DIR}/include)
+set(CMAKE_CXX_STANDARD 23)
 include(FetchContent)
 
 # Optionally include only the needed Boost libs
@@ -17,13 +17,15 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(Boost)
 
 # ---------- Server ----------
-add_executable(server
-    Src/packet.cpp
-    Src/alaw.cpp
-    Src/PCMReciver.cpp
-    Src/Test_PCMReciver.cpp
+add_executable(rtp_builder
+  Src/PCMReceiver.cpp
+  Src/RTPPacketizer.cpp
+  Src/RTPTransmitter.cpp
+  Src/alaw.cpp
+  Src/packet.cpp
+  Src/Test_PCMReceiver.cpp
 )
-target_link_libraries(server PRIVATE  Boost::foreach Boost::beast Boost::asio Boost::system Boost::core )
+target_link_libraries(rtp_builder PRIVATE  Boost::foreach Boost::beast Boost::asio Boost::system Boost::core )
 
 
 

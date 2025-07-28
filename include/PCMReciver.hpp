@@ -1,4 +1,5 @@
 #pragma once
+#include "boost/asio/awaitable.hpp"
 #include "boost/asio/streambuf.hpp"
 #include <boost/asio.hpp>
 #include <vector>
@@ -17,7 +18,8 @@ public:
   // Asynchronously fetch exactly one frame’s worth of PCM.
   // Invokes handler(ec, frame) when ready (or on error).
   void GetNextFrameasync(FrameHandler handler);
-
+  
+  boost::asio::awaitable<std::vector<uint8_t>> asyncGetNextFrameAwait();
   static constexpr size_t frameSizeBytes = 960 * 2;
 
 private:
