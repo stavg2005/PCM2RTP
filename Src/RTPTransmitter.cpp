@@ -16,6 +16,7 @@ RTPTransmitter::RTPTransmitter(boost::asio::io_context &io,
   socket_.bind({boost::asio::ip::udp::v4(), localPort});
 }
 
+    //data is the rtp packet in byte form inorder to send to client
 void RTPTransmitter::asyncSend(const uint8_t *data,std::size_t size,SendHandler handler){
     auto buf = std::make_shared<std::vector<uint8_t>>(data,data+size); //to keep buffer alive until the handler is called
     socket_.async_send_to(boost::asio::buffer(*buf),

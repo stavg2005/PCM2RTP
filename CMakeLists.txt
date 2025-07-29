@@ -25,6 +25,16 @@ add_executable(rtp_builder
   Src/packet.cpp
   Src/Test_PCMReceiver.cpp
 )
+
+# if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" )
+#     set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
+# set (CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
+#     add_compile_options(-fsanitize=address -fno-omit-frame-pointer -g -fno-common)
+#     add_link_options(-fsanitize=address -fuse-ld=lld )
+#         target_compile_options(rtp_builder PRIVATE -stdlib=libc++)
+#     target_link_options(rtp_builder PRIVATE -stdlib=libc++)
+# endif()
+
 target_link_libraries(rtp_builder PRIVATE  Boost::foreach Boost::beast Boost::asio Boost::system Boost::core )
 
 
