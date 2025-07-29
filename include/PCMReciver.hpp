@@ -16,6 +16,7 @@ public:
   static constexpr unsigned BPS = 16; // bits per sample (PCM)
   static constexpr unsigned MS = 20;  // ms per frame
 
+  static constexpr unsigned PT =8;
  
   static constexpr size_t SAMPLES_PER_FRAME = SR * MS / 1000; 
   static constexpr size_t FRAME_SIZE_BYTES =
@@ -37,7 +38,7 @@ public:
   void GetNextFrameasync(FrameHandler handler);
   void doReceive();
   
- 
+  void startContinuousReceiving();
 private:
  
 
@@ -45,4 +46,5 @@ private:
   boost::asio::ip::udp::endpoint senderEndpoint_;
   boost::asio::streambuf sbuf_;
   FrameHandler pendingHandler_;
+   bool receiving_=false;
 };

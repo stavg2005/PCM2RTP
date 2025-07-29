@@ -23,7 +23,12 @@ add_executable(rtp_builder
   Src/RTPTransmitter.cpp
   Src/alaw.cpp
   Src/packet.cpp
-  Src/Test_PCMReceiver.cpp
+  Src/main.cpp
+  Src/SessionManager.cpp
+)
+
+add_executable(receiver
+  Src/dummy.cpp
 )
 
 # if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" )
@@ -37,5 +42,6 @@ add_executable(rtp_builder
 
 target_link_libraries(rtp_builder PRIVATE  Boost::foreach Boost::beast Boost::asio Boost::system Boost::core )
 
+target_link_libraries(receiver PRIVATE Boost::asio Boost::system )
 
 
