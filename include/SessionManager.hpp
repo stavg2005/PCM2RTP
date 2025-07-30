@@ -22,6 +22,4 @@ private:
     RTPPacketizer packetizer_;
     RTPTransmitter trasmitter_;
     std::vector<uint8_t> rtpBuffer_;
-    size_t frameCount_;
-    std::chrono::steady_clock::time_point startTime_;
 };
