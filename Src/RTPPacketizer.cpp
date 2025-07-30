@@ -29,9 +29,8 @@ size_t RTPPacketizer::packetize(const std::vector<uint8_t>& payload,bool marker,
   // Serialize the RTP packet into the caller-provided buffer
   auto maybeSpan = packet.to_buffer(outBuffer);
 
-  // If to_buffer() failed (e.g. outBuffer too small), it will return std::nullopt.
-  // In that case, nothing was written — return 0 bytes to signal an error to the caller. 
-  if(!maybeSpan) // catch error
+  // If to_buffer() failed (e.g. outBuffer too small),
+  if(!maybeSpan) 
     return 0;
     
   timestamp_ += timestampIncrement_;

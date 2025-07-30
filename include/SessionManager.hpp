@@ -17,9 +17,11 @@ public:
 private:
     void requestNextFrame();
     void packetizeAsync(boost::span<const uint8_t> frame);
-    
+    using FrameHandler = PCMReceiver::FrameHandler;
     PCMReceiver reciver_;
     RTPPacketizer packetizer_;
     RTPTransmitter trasmitter_;
     std::vector<uint8_t> rtpBuffer_;
+    
+    FrameHandler        frameHandler_;
 };
