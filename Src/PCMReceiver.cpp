@@ -1,104 +1,71 @@
-// PCMReceiver.cpp
-#include "../include/PCMReciver.hpp"
-
-#include <boost/asio.hpp>
-#include <iostream>
+#include "rtpbuilder/PCMReceiver.hpp"
 #include <cstdint>
-
-
+#include <cstring>  
 
 
 PCMReceiver::PCMReceiver(net::io_context& io, uint16_t localPort)
     : socket_(io, udp::endpoint(udp::v4(), localPort)),
-      receiving_(false)
-{
-    std::cout << "PCMReceiver created on port " << localPort << std::endl;
-}
+      reservoir_(RES_CAP)                     // allocate once
+{}
 
-void PCMReceiver::GetNextFrameasync(FrameHandler handler)
-{
-    // Store the user's handler
-    pendingHandler_ = std::move(handler);
 
-    // Start receiving if not already receiving
+
+void PCMReceiver::start()
+{
     if (!receiving_) {
-        startContinuousReceiving();
+        receiving_ = true;
+        doReceive();
     }
 }
 
 
-bool PCMReceiver::hasFrame()
-{
-    return sbuf_.size() >= FRAME_SIZE_BYTES;
-}
-
-// Returns a read‑only view (span) over the current frame’s bytes without copying them
-boost::span<const uint8_t> PCMReceiver::peekFrame()
-{
-    // Get the sequence of memory blocks (const_buffer objects) currently stored in the streambuf
-    auto bufs = sbuf_.data();
-
-    // Create an iterator to the first byte of the combined data sequence
-    // (treats all blocks as one continuous array)
-    auto it = boost::asio::buffers_begin(bufs);
-
-    // Take the address of the first byte and reinterpret it as a pointer to uint8_t
-    const uint8_t* ptr = reinterpret_cast<const uint8_t*>(&*it);
-
-    // Return a span (read‑only view) of FRAME_SIZE_BYTES starting at ptr (no copying)
-    return {ptr, FRAME_SIZE_BYTES};
-}
 
 void PCMReceiver::consumeFrame()
 {
-    // Mark the bytes as consumed so streambuf can reuse that space
-    sbuf_.consume(FRAME_SIZE_BYTES);
+    std::memmove(reservoir_.data(),
+                 reservoir_.data() + FRAME_SIZE_BYTES,
+                 size_ - FRAME_SIZE_BYTES);
+    size_ -= FRAME_SIZE_BYTES;
 }
 
 
 
-void PCMReceiver::startContinuousReceiving()
+void PCMReceiver::ensureSpace(size_t need)
 {
-    receiving_ = true;
-    doReceive();
+    // ensure at least `need` bytes of free tail space
+    if (reservoir_.size() - size_ < need) {
+        // shift unread bytes to the front
+        std::memmove(reservoir_.data(),
+                     reservoir_.data() + size_,    
+                     size_);
+    
+    }
 }
+
+
 
 void PCMReceiver::doReceive()
 {
-    /* sbuf_.prepare() returns a `mutable_buffers` object – a sequence of
-       writable memory chunks. Each chunk is a boost::asio::mutable_buffer
-       (pointer + size). Boost.Asio will fill these chunks with incoming data
-       without copying them into a temporary array. `bufs` is now a list of
-       those buffers that are in the newly‑allocated area. */
-    auto bufs = sbuf_.prepare(2048);
-
+    ensureSpace(MAX_UDP_PACKET);                    // make room if needed
     socket_.async_receive_from(
-        bufs, senderEndpoint_,
-        [this](boost::system::error_code ec, std::size_t bytesReceived)
+        net::buffer(reservoir_.data() + size_,
+                    reservoir_.size() - size_),// tail free space
+        senderEndpoint_,
+        [this](auto ec, std::size_t n)
         {
             if (ec) {
-                std::cerr << "UDP receive error: " << ec.message() << std::endl;
-                receiving_ = false;
-                if (pendingHandler_) {
-                    pendingHandler_(ec, {}); 
-                }
-                return; 
+                if (handler_) handler_(ec, {});
+                return;
             }
 
-            // Mark the received bytes as “ready for reading” in the streambuf.
-            sbuf_.commit(bytesReceived);
+            size_ += n; // grew in place
 
-            // While there’s enough data to form a complete frame,deliver every frame immediately 
             while (hasFrame()) {
-
-                // Get a span (read‑only view) of the complete frame without copying memory
-                auto frame = peekFrame();
-
-                pendingHandler_({}, frame);
-
+                if (handler_)
+                    handler_({}, peekFrame());
+                consumeFrame();
             }
 
-            // Keep receiving more data
-            doReceive();
+            doReceive();// loop
         });
 }

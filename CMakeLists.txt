@@ -1,47 +1,56 @@
 cmake_minimum_required(VERSION 3.27)
-project(RTP-BUILDER)
-include_directories(${CMAKE_SOURCE_DIR}/include)
+project(rtpbuilder LANGUAGES CXX)
+
 set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# ---------- Fetch Boost (header-only bits + libs you need) ----------
 include(FetchContent)
 
-# Optionally include only the needed Boost libs
 set(BOOST_ENABLE_CMAKE ON)
 set(BOOST_INCLUDE_LIBRARIES beast asio system core foreach)
 
 FetchContent_Declare(
-  Boost
+  boost
   URL https://github.com/boostorg/boost/releases/download/boost-1.88.0/boost-1.88.0-cmake.zip
   DOWNLOAD_EXTRACT_TIMESTAMP ON
 )
+FetchContent_MakeAvailable(boost)
 
-FetchContent_MakeAvailable(Boost)
-
-# ---------- Server ----------
-add_executable(rtp_builder
-  Src/PCMReceiver.cpp
-  Src/RTPPacketizer.cpp
-  Src/RTPTransmitter.cpp
-  Src/alaw.cpp
-  Src/packet.cpp
-  Src/main.cpp
-  Src/SessionManager.cpp
+# ---------- Build your library ----------
+add_library(rtpbuilder STATIC
+    src/alaw.cpp
+    src/packet.cpp
+    src/PCMReceiver.cpp
+    src/RTPPacketizer.cpp
+    src/RTPTransmitter.cpp
+    src/SessionManager.cpp
 )
 
-add_executable(receiver
-  Src/dummy.cpp
+# Expose *public* headers
+target_include_directories(rtpbuilder
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
 )
 
-# if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" )
-#     set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
-# set (CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
-#     add_compile_options(-fsanitize=address -fno-omit-frame-pointer -g -fno-common)
-#     add_link_options(-fsanitize=address -fuse-ld=lld )
-#         target_compile_options(rtp_builder PRIVATE -stdlib=libc++)
-#     target_link_options(rtp_builder PRIVATE -stdlib=libc++)
-# endif()
+# Link Boost bits
+target_link_libraries(rtpbuilder
+    PUBLIC
+        Boost::asio
+        Boost::system
+        Boost::beast
+        Boost::core
+        Boost::foreach
+)
 
-target_link_libraries(rtp_builder PRIVATE  Boost::foreach Boost::beast Boost::asio Boost::system Boost::core )
+target_compile_features(rtpbuilder PUBLIC cxx_std_23)
 
-target_link_libraries(receiver PRIVATE Boost::asio Boost::system )
+# ---------- Example executable -------------
+add_executable(rtp_demo src/main.cpp)
+target_link_libraries(rtp_demo PRIVATE rtpbuilder)
 
-
+# Dummy receiver exe
+add_executable(receiver src/dummy.cpp)
+target_link_libraries(receiver PRIVATE rtpbuilder)
