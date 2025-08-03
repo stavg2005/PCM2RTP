@@ -1,46 +1,44 @@
 #include <rtpbuilder/SessionManager.hpp>
 #include <boost/asio/io_context.hpp>
+#include <boost/asio/signal_set.hpp>
 #include <iostream>
-#include <csignal>
-#include <memory>
 
-// Global pointer to SessionManager so we can stop it on Ctrl+C
-std::shared_ptr<SessionManager> g_session;
-
-void signalHandler(int signal) {
-    std::cerr << "\nCaught SIGINT (Ctrl+C). Shutting down...\n";
-    //וfuture exit logic...
-    std::exit(0);
-}
-
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 int main(int argc, char* argv[]) {
+
+    std::cout << "what is going on";
     if (argc != 4) {
         std::cerr << "Usage: " << argv[0]
                   << " <localPort> <remoteAddr> <remotePort>\n";
         return 1;
     }
 
-    uint16_t localPort = static_cast<uint16_t>(std::stoi(argv[1]));
-    std::string remoteAddr = argv[2];
-    uint16_t remotePort = static_cast<uint16_t>(std::stoi(argv[3]));
-
-    // Set up Ctrl+C handler
-    std::signal(SIGINT, signalHandler);
+    uint16_t localPort   = static_cast<uint16_t>(std::stoi(argv[1]));
+    std::string remoteIp = argv[2];
+    uint16_t remotePort  = static_cast<uint16_t>(std::stoi(argv[3]));
 
     try {
         boost::asio::io_context io;
 
-        // Create the session manager
-        g_session = std::make_shared<SessionManager>(io, localPort, remoteAddr, remotePort);
+        
+        SessionManager session(io, localPort, remoteIp, remotePort);
+        session.start();
+        
+        // set up signal handling inside Asio
+        boost::asio::signal_set signals(io, SIGINT, SIGTERM);
+        signals.async_wait([&](const boost::system::error_code&, int sig) {
+            std::cerr << "\nCaught signal " << sig << " — shutting down gracefully\n";
+            session.stop();  
+            io.stop();    
+        });
 
-        // Start receiving, packetizing, and sending
-        g_session->start();
-        std::cout << " Session started. Listening on UDP port " << localPort
-                  << " and sending RTP to " << remoteAddr << ":" << remotePort << "\n";
+        std::cout << " Session started on UDP " << localPort
+                  << " → sending RTP to " << remoteIp << ":" << remotePort << "\n";
 
-        // Run the IO loop (this never returns until you stop the program)
-        io.run();
+        io.run();  
 
     } catch (const std::exception& ex) {
         std::cerr << " Fatal error: " << ex.what() << "\n";

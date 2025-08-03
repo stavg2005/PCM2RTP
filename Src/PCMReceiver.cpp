@@ -1,71 +1,41 @@
-#include "rtpbuilder/PCMReceiver.hpp"
-#include <cstdint>
-#include <cstring>  
+#include <iostream>
+#include <rtpbuilder/PCMReceiver.hpp>
+#include <rtpbuilder/PacketUtils.hpp>
+#include <rtpbuilder/packet.hpp>
 
-
-PCMReceiver::PCMReceiver(net::io_context& io, uint16_t localPort)
+PCMReceiver::PCMReceiver(net::io_context &io, uint16_t localPort,
+                         const std::string &remoteIp, uint16_t remotePort)
     : socket_(io, udp::endpoint(udp::v4(), localPort)),
-      reservoir_(RES_CAP)                     // allocate once
-{}
-
-
-
-void PCMReceiver::start()
-{
-    if (!receiving_) {
-        receiving_ = true;
-        doReceive();
-    }
+      packetizer_(/* payloadType */ 8, generate_ssrc(), SAMPLES_PER_FRAME),
+      transmitter_(io, remoteIp, remotePort) {
+  std::cout << "PCMReceiver created on port " << localPort << std::endl;
 }
 
+void PCMReceiver::start() { doReceive(); }
 
+void PCMReceiver::doReceive() {
+  socket_.async_receive_from(
+      boost::asio::buffer(buffer_), senderEndpoint_,
+      [this](boost::system::error_code ec, std::size_t bytesReceived) {
+        if (ec) {
+          std::cerr << "Recv error: " << ec.message() << '\n';
+          return;
+        }
 
-void PCMReceiver::consumeFrame()
-{
-    std::memmove(reservoir_.data(),
-                 reservoir_.data() + FRAME_SIZE_BYTES,
-                 size_ - FRAME_SIZE_BYTES);
-    size_ -= FRAME_SIZE_BYTES;
-}
+        // convert PCM → RTP into rtpBuf_
+        std::size_t pktLen = PacketUtils::packet2rtp(
+            {buffer_.data(), bytesReceived},              // source
+            packetizer_, {rtpBuf_.data(), rtpBuf_.size()} // destination
+        );
+        if (pktLen == 0) {
+          std::cerr << "packetize failed\n";
+          doReceive();
+          return;
+        }
 
+        
+        transmitter_.asyncSend({rtpBuf_.data(), pktLen}, pktLen);
 
-
-void PCMReceiver::ensureSpace(size_t need)
-{
-    // ensure at least `need` bytes of free tail space
-    if (reservoir_.size() - size_ < need) {
-        // shift unread bytes to the front
-        std::memmove(reservoir_.data(),
-                     reservoir_.data() + size_,    
-                     size_);
-    
-    }
-}
-
-
-
-void PCMReceiver::doReceive()
-{
-    ensureSpace(MAX_UDP_PACKET);                    // make room if needed
-    socket_.async_receive_from(
-        net::buffer(reservoir_.data() + size_,
-                    reservoir_.size() - size_),// tail free space
-        senderEndpoint_,
-        [this](auto ec, std::size_t n)
-        {
-            if (ec) {
-                if (handler_) handler_(ec, {});
-                return;
-            }
-
-            size_ += n; // grew in place
-
-            while (hasFrame()) {
-                if (handler_)
-                    handler_({}, peekFrame());
-                consumeFrame();
-            }
-
-            doReceive();// loop
-        });
+        doReceive(); 
+      });
 }

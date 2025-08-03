@@ -1,54 +1,43 @@
 #pragma once
+#include <array>
 #include <boost/asio.hpp>
 #include <boost/core/span.hpp>
-#include <array>
+#include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <vector>
+
+#include "RTPPacketizer.hpp"
+#include "RTPTransmitter.hpp"
 
 namespace net = boost::asio;
 using udp = net::ip::udp;
 
 class PCMReceiver {
 public:
-    // ── audio format ──────────────────────────────────────────────
-    static constexpr unsigned SR  = 8000;   // Hz
-    static constexpr unsigned CH  = 1;
-    static constexpr unsigned BPS = 16;     // bits / sample
-    static constexpr unsigned MS  = 20;     // ms / frame
-    static constexpr unsigned PT  = 8;      // RTP payload-type (PCMA)
+  // ── audio format ──────────────────────────────────────────────
+  static constexpr unsigned SR = 8000; // Hz
+  static constexpr unsigned CH = 1;
+  static constexpr unsigned BPS = 16; // bits / sample
+  static constexpr unsigned MS = 20;  // ms / frame
+  static constexpr unsigned PT = 8;   // RTP payload-type (PCMA)
 
-    static constexpr size_t SAMPLES_PER_FRAME = SR * MS / 1000;          
-    static constexpr size_t FRAME_SIZE_BYTES  =
-        SAMPLES_PER_FRAME * CH * (BPS / 8);                             
-    static constexpr size_t RES_CAP = 10 * FRAME_SIZE_BYTES;            
+  static constexpr size_t SAMPLES_PER_FRAME = SR * MS / 1000;
+  static constexpr size_t FRAME_SIZE_BYTES = SAMPLES_PER_FRAME * CH * (BPS / 8);
+  static constexpr size_t RES_CAP = 10 * FRAME_SIZE_BYTES;
 
-    using FrameHandler = std::function<
-        void(const boost::system::error_code&, boost::span<const uint8_t>)
-    >;
+  PCMReceiver(net::io_context &io, uint16_t localPort,
+              const std::string &remoteIp, uint16_t remotePort);
 
-    explicit PCMReceiver(net::io_context& io, uint16_t localPort);
-
-    void setFrameHandler(FrameHandler h) { handler_ = std::move(h); }
-    void start();
-
-    bool                         hasFrame()   const { return size_ >= FRAME_SIZE_BYTES; }
-    boost::span<const uint8_t>   peekFrame()  { return { reservoir_.data(), FRAME_SIZE_BYTES }; }
-    void                         consumeFrame();
+  void start();
 
 private:
-    void doReceive();                         
-    void ensureSpace(size_t need);            
+  void doReceive();
 
-    udp::socket          socket_;
-    udp::endpoint        senderEndpoint_;
-
-    static constexpr size_t MAX_UDP_PACKET = 2048;
-
-    // grow-in-place reservoir 
-    std::vector<uint8_t> reservoir_;          // capacity = RES_CAP
-    size_t               size_      = 0;      // bytes currently stored
-
-    FrameHandler         handler_;
-    bool                 receiving_ = false;
+  udp::socket socket_;
+  udp::endpoint senderEndpoint_;
+  static constexpr size_t MAX_UDP_PACKET = 2048;
+  std::array<uint8_t, MAX_UDP_PACKET> buffer_{};
+  std::array<uint8_t, FRAME_SIZE_BYTES  > rtpBuf_;
+  RTPPacketizer packetizer_;
+  RTPTransmitter transmitter_;
 };

@@ -1,3 +1,4 @@
+#include "boost/core/span.hpp"
 #include <rtpbuilder/RTPPacketizer.hpp>
 #include <rtpbuilder/packet.hpp>
 #include <cstdint>
@@ -11,7 +12,7 @@ RTPPacketizer::RTPPacketizer(uint8_t payloadType,
 {}
 
 //gets an aleady encoded payload ,constructs an RTP Packet ,  Serialize the packet into the caller's buffer and returns how many bytes wrote for future async_send_to function
-size_t RTPPacketizer::packetize(const std::vector<uint8_t>& payload,bool marker,boost::span<uint8_t> outBuffer){
+size_t RTPPacketizer::packetize(boost::span<uint8_t> payload,boost::span<uint8_t> outBuffer){
   
 
 
@@ -19,7 +20,7 @@ size_t RTPPacketizer::packetize(const std::vector<uint8_t>& payload,bool marker,
         /* padding */    false,            // Padding bit: when true, packet has extra padding bytes at the end (for alignment or trailers). We don't use padding, so it's false.
         /* version */    version_,         // RTP version (always 2)
         /* payload_type */ payloadType_,   // Payload type (e.g. 8 for PCMA)
-        /* marker */     marker,           // Marker bit: payload‑specific flag (e.g. start of talkspurt or end of frame). We pass it in as needed.
+        /* marker */     false,           // Marker bit: payload‑specific flag (e.g. start of talkspurt or end of frame). We pass it in as needed.
         /* sequence_num */ sequenceNum_++,  // Packet sequence number, increments per packet
         /* timestamp */  timestamp_,        // Timestamp for this packet's first sample
         /* ssrc */       ssrc_,             // Synchronization source identifier

@@ -26,6 +26,7 @@ add_library(rtpbuilder STATIC
     src/RTPPacketizer.cpp
     src/RTPTransmitter.cpp
     src/SessionManager.cpp
+    src/PacketUtils.cpp
 )
 
 # Expose *public* headers
@@ -51,6 +52,10 @@ target_compile_features(rtpbuilder PUBLIC cxx_std_23)
 add_executable(rtp_demo src/main.cpp)
 target_link_libraries(rtp_demo PRIVATE rtpbuilder)
 
+add_executable(pcm_sender src/pcm_sender.cpp)
+target_link_libraries(pcm_sender PRIVATE rtpbuilder)
 # Dummy receiver exe
 add_executable(receiver src/dummy.cpp)
 target_link_libraries(receiver PRIVATE rtpbuilder)
+
+
