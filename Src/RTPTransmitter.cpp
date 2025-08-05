@@ -12,6 +12,18 @@ RTPTransmitter::RTPTransmitter(boost::asio::io_context &io,
   socket_.open(boost::asio::ip::udp::v4());
 }
 
+void RTPTransmitter::stop() {
+  std::cout << "RTPTransmitter stopping...\n";
+
+  if (socket_.is_open()) {
+    try {
+      socket_.cancel();
+    } catch (const std::exception &e) {
+      std::cerr << "Error canceling transmitter: " << e.what() << std::endl;
+    }
+  }
+}
+
 void RTPTransmitter::asyncSend(boost::span<uint8_t> buf, std::size_t size) {
 
   socket_.async_send_to(
@@ -19,7 +31,7 @@ void RTPTransmitter::asyncSend(boost::span<uint8_t> buf, std::size_t size) {
                           size), // Only send 'size' bytes, not the whole buffer
       remoteEndpoint_,
       [buf](const boost::system::error_code &ec, std::size_t bytesSent) {
-        if (ec) {   
+        if (ec) {
           std::cerr << "Send error: " << ec.message() << "\n";
         }
       });

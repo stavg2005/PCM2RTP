@@ -1,3 +1,4 @@
+
 #include <rtpbuilder/SessionManager.hpp>
 #include <iostream>
 
@@ -15,6 +16,9 @@ void SessionManager::start() {
 }
 
 void SessionManager::stop() {
-    // if we ever need a clean shutdown, we can extend PCMReceiver with a stop() method
-    std::cout << "SessionManager stopping session (future cleanup here)\n";
+    std::cout << "SessionManager initiating shutdown...\n";
+    
+        receiver_.stop();
+    
+    std::cout << "SessionManager shutdown complete.\n";
 }

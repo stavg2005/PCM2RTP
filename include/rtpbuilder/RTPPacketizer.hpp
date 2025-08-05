@@ -1,6 +1,5 @@
 #pragma  once
 #include <basetsd.h>
-#include <vector>
 #include <cstdint>
 #include "boost/core/span.hpp"
 

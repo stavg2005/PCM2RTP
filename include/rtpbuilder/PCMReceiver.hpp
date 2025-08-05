@@ -4,7 +4,7 @@
 #include <boost/core/span.hpp>
 #include <cstddef>
 #include <cstdint>
-#include <vector>
+#include <rtpbuilder/PacketUtils.hpp>
 
 #include "RTPPacketizer.hpp"
 #include "RTPTransmitter.hpp"
@@ -29,7 +29,7 @@ public:
               const std::string &remoteIp, uint16_t remotePort);
 
   void start();
-
+  void stop();
 private:
   void doReceive();
 
@@ -37,7 +37,7 @@ private:
   udp::endpoint senderEndpoint_;
   static constexpr size_t MAX_UDP_PACKET = 2048;
   std::array<uint8_t, MAX_UDP_PACKET> buffer_{};
-  std::array<uint8_t, FRAME_SIZE_BYTES  > rtpBuf_;
+  const std::size_t PCM_SIZE = FRAME_SIZE_BYTES;
   RTPPacketizer packetizer_;
   RTPTransmitter transmitter_;
 };

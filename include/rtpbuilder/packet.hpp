@@ -44,7 +44,6 @@ struct RTPPacket {
         Header& operator=(const Header&) = default;
     } header;
 
-    // ✅ Changed from std::vector<uint8_t> to span
     boost::span<const uint8_t> payload;
 
     RTPPacket() = default;

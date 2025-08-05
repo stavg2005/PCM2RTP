@@ -9,7 +9,6 @@
 
 int main(int argc, char* argv[]) {
 
-    std::cout << "what is going on";
     if (argc != 4) {
         std::cerr << "Usage: " << argv[0]
                   << " <localPort> <remoteAddr> <remotePort>\n";
@@ -30,13 +29,13 @@ int main(int argc, char* argv[]) {
         // set up signal handling inside Asio
         boost::asio::signal_set signals(io, SIGINT, SIGTERM);
         signals.async_wait([&](const boost::system::error_code&, int sig) {
-            std::cerr << "\nCaught signal " << sig << " — shutting down gracefully\n";
+            std::cerr << "\nCaught signal " <<  " — shutting down gracefully\n";
             session.stop();  
             io.stop();    
         });
 
         std::cout << " Session started on UDP " << localPort
-                  << " → sending RTP to " << remoteIp << ":" << remotePort << "\n";
+                  << " sending RTP to " << remoteIp << ":" << remotePort << "\n";
 
         io.run();  
 
