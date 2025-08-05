@@ -10,7 +10,8 @@ class RTPPacketizer{
     RTPPacketizer(uint8_t payload_type,uint32_t ssrc,uint32_t timestampIncrement);
 
     size_t packetize(boost::span<uint8_t> payload,boost::span<uint8_t> outBuffer);
-
+    void updateTimestamp();
+uint32_t currentTimestamp() const;
     private:
         uint8_t payloadType_;
         uint32_t ssrc_;

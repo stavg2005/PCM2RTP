@@ -11,7 +11,7 @@ public:
   RTPTransmitter(boost::asio::io_context &io, const std::string &remoteAddr,
                  uint16_t remotePort);
 
-  void asyncSend(boost::span<uint8_t> data, std::size_t size);
+  void asyncSend(boost::span<const uint8_t> data, std::size_t size);
   void stop();
 private:
   boost::asio::ip::udp::socket socket_;

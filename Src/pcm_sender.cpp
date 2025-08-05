@@ -1,4 +1,3 @@
-
 #include <boost/asio.hpp>
 #include <chrono>
 #include <fstream>
@@ -9,98 +8,58 @@ using namespace std::chrono_literals;
 namespace asio = boost::asio;
 using udp = asio::ip::udp;
 
-class PcmSender : public std::enable_shared_from_this<PcmSender> {
-public:
-  PcmSender(asio::io_context &io, std::string_view pcmPath, udp::endpoint dest,
-            std::size_t bytesPerPkt, std::chrono::milliseconds period = 20ms)
-      : socket_{io, udp::v4()}, timer_{io},
-        file_{pcmPath.data(), std::ios::binary}, dest_{std::move(dest)},
-        chunk_(bytesPerPkt), period_{period} {
-    if (!file_)
-      throw std::runtime_error("can't open PCM file");
-
-    std::cout << " streaming " << pcmPath << " to " << dest_.address() << ':'
-              << dest_.port() << "   every " << period_.count() << " ms ("
-              << chunk_.size() << " bytes)\n";
-  }
-
-  void start() {
-    nextTick_ = asio::steady_timer::clock_type::now();
-    tick();
-  }
-
-private:
-  void tick() {
-    if (!readChunk())
-      return;
-
-    auto self = shared_from_this(); // keep object alive
-
-    socket_.async_send_to(
-        asio::buffer(chunk_), dest_,
-        [this, self](boost::system::error_code ec, std::size_t /*bytes*/) {
-          if (ec) {
-            std::cerr << "send error: " << ec.message() << '\n';
-            return;
-          }
-
-          /* schedule **absolute** next deadline */
-          nextTick_ += period_;
-          while (nextTick_ <= asio::steady_timer::clock_type::now())
-            nextTick_ += period_; // catch-up if we fell behind
-
-          timer_.expires_at(nextTick_);
-          timer_.async_wait([this, self](boost::system::error_code ec2) {
-            if (!ec2)
-              tick(); // loop
-          });
-        });
-  }
-
-  bool readChunk() {
-    file_.read(reinterpret_cast<char *>(chunk_.data()), chunk_.size());
-    std::size_t n = static_cast<std::size_t>(file_.gcount());
-    if (n == 0)
-      return false; 
-
-    if (n < chunk_.size()) 
-      chunk_.resize(n);
-
-    return true;
-  }
-
-  udp::socket socket_;
-  asio::steady_timer timer_;
-  std::ifstream file_;
-  udp::endpoint dest_;
-  std::vector<uint8_t> chunk_;
-  std::chrono::milliseconds period_;
-  asio::steady_timer::time_point nextTick_;
-};
-
-
 int main(int argc, char *argv[]) {
   if (argc != 5) {
     std::cerr << "usage: " << argv[0]
-              << " <pcm_file> <remote_ip> <remote_port> <bytes_per_packet>\n"
-                 "ex   : "
-              << argv[0] << " speech.pcm 127.0.0.1 6000 320\n";
+              << " <pcm_file> <remote_ip> <remote_port> <bytes_per_packet>\n";
     return 1;
   }
 
   try {
     asio::io_context io;
-
+    udp::socket socket(io, udp::v4());
     udp::endpoint dest(asio::ip::make_address(argv[2]),
                        static_cast<unsigned short>(std::stoi(argv[3])));
 
-    auto sender = std::make_shared<PcmSender>(
-        io, argv[1], dest, static_cast<std::size_t>(std::stoul(argv[4])));
+    std::ifstream file(argv[1], std::ios::binary);
+    if (!file) {
+      std::cerr << "can't open PCM file\n";
+      return 1;
+    }
 
-    sender->start();
-    io.run();
+    std::size_t chunk_size = static_cast<std::size_t>(std::stoul(argv[4]));
+    std::vector<uint8_t> chunk(chunk_size);
+
+    std::cout << "streaming " << argv[1] << " to " << argv[2] << ":" << argv[3]
+              << " every 20ms (" << chunk_size << " bytes)\n";
+
+    auto start_time = std::chrono::steady_clock::now();
+    int packet_count = 0;
+
+    while (true) {
+      file.read(reinterpret_cast<char *>(chunk.data()), chunk_size);
+      std::size_t bytes_read = static_cast<std::size_t>(file.gcount());
+
+      // encode + rtp
+
+      if (bytes_read == 0)
+        break; // EOF
+
+      if (bytes_read < chunk_size) {
+        chunk.resize(bytes_read);
+      }
+
+      socket.send_to(asio::buffer(chunk), dest);
+
+      // Calculate absolute next send time
+      packet_count++;
+      auto next_time =
+          start_time + std::chrono::milliseconds(packet_count * 20);
+      std::this_thread::sleep_until(next_time);
+    }
+
   } catch (const std::exception &ex) {
-    std::cerr << "fatal: " << ex.what() << '\n';
+    std::cerr << "error: " << ex.what() << '\n';
     return 1;
   }
 }

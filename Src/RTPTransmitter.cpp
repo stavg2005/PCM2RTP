@@ -24,7 +24,7 @@ void RTPTransmitter::stop() {
   }
 }
 
-void RTPTransmitter::asyncSend(boost::span<uint8_t> buf, std::size_t size) {
+void RTPTransmitter::asyncSend(boost::span< const uint8_t> buf, std::size_t size) {
 
   socket_.async_send_to(
       boost::asio::buffer(buf,

@@ -41,7 +41,14 @@ size_t RTPPacketizer::packetize(boost::span<uint8_t> payload,
   // If to_buffer() failed (e.g. outBuffer too small),
   if (!maybeSpan)
     return 0;
-  std::println("timestamp: {}", timestamp_);
   timestamp_ += timestampIncrement_;
   return maybeSpan->size();
+}
+
+void RTPPacketizer::updateTimestamp() {
+    timestamp_ += timestampIncrement_;
+}
+
+uint32_t RTPPacketizer::currentTimestamp() const {
+    return timestamp_;
 }

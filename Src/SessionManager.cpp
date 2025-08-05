@@ -11,7 +11,7 @@ SessionManager::SessionManager(boost::asio::io_context& io,
 }
 
 void SessionManager::start() {
-    receiver_.start();
+    receiver_.read_pcm_from_wav("output.wav");
     std::cout << "SessionManager started PCMReceiver\n";
 }
 
