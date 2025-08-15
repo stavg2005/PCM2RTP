@@ -41,6 +41,4 @@ Thumbs.db         # Windows
 *.suo
 *.vcxproj.*
 
-#──────────── Secret files ──────────────────
-/Src/alaw.cpp
-/Src/packet.cpp
+
