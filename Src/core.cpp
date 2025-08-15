@@ -6,7 +6,7 @@
 #include <iostream>
 
 
-std::unique_ptr<SessionManager> TransmitFile(
+std::unique_ptr<SessionManager> TransmitWavFile(
     boost::asio::io_context& io, 
     uint16_t localPort,
     const std::string& remoteIp,

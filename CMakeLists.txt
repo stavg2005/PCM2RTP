@@ -27,6 +27,7 @@ add_library(rtpbuilder STATIC
     src/RTPTransmitter.cpp
     src/SessionManager.cpp
     src/PacketUtils.cpp
+    src/core.cpp
 )
 
 # Expose *public* headers
