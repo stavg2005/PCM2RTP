@@ -12,8 +12,9 @@ SessionManager::SessionManager(boost::asio::io_context& io,
 }
 
 void SessionManager::start( std::filesystem::path path, std::string file_name) {
+   std::cout << "SessionManager started PCMReceiver\n";
     receiver_.read_pcm_from_wav(path,file_name);
-    std::cout << "SessionManager started PCMReceiver\n";
+   stop();
 }
 
 void SessionManager::stop() {
