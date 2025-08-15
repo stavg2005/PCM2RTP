@@ -1,4 +1,5 @@
 
+#include <filesystem>
 #include <rtpbuilder/SessionManager.hpp>
 #include <iostream>
 
@@ -10,8 +11,8 @@ SessionManager::SessionManager(boost::asio::io_context& io,
 {
 }
 
-void SessionManager::start() {
-    receiver_.read_pcm_from_wav("output.wav");
+void SessionManager::start( std::filesystem::path path, std::string file_name) {
+    receiver_.read_pcm_from_wav(path,file_name);
     std::cout << "SessionManager started PCMReceiver\n";
 }
 

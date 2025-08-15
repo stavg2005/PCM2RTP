@@ -1,3 +1,4 @@
+#include <rtpbuilder/core.hpp>
 #include <filesystem>
 #include <rtpbuilder/SessionManager.hpp>
 #include <boost/asio/io_context.hpp>
@@ -7,8 +8,7 @@
 #ifdef _WIN32
 #include <windows.h>
 #endif
-
-int main(int argc, char* argv[]) {
+int TransmitFile(int argc, char* argv[]){
 
     if (argc != 6) {
         std::cerr << "Usage: " << argv[0]

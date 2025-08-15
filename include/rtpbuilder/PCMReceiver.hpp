@@ -33,7 +33,7 @@ public:
 
   void start();
   void stop();
-  void read_pcm_from_wav(const std::string &filename);
+  void read_pcm_from_wav(std::filesystem::path path ,const std::string &filename);
 
 private:
   void doReceive();

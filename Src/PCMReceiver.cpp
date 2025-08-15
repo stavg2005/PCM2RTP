@@ -1,4 +1,5 @@
 #include "rtpbuilder/RTPPacketizer.hpp"
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -32,11 +33,12 @@ void PCMReceiver::stop() {
   }
 }
 
-void PCMReceiver::read_pcm_from_wav(const std::string &filename) {
-  pcmFile_ = std::make_unique<std::ifstream>(filename, std::ios::binary);
+void PCMReceiver::read_pcm_from_wav(std::filesystem::path path ,const std::string &filename) {
+  pcmFile_ = std::make_unique<std::ifstream>(path, std::ios::binary);
 
   if (!pcmFile_->is_open()) {
     std::cerr << "Failed to open PCM WAV file: " << filename << "\n";
+    
     return;
   }
 

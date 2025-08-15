@@ -10,7 +10,7 @@ public:
                    const std::string& remoteAddr,
                    uint16_t remotePort);
 
-    void start();
+    void start(std::filesystem::path path, std::string file_name);
     void stop();
 
 private:
