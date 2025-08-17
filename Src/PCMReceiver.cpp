@@ -1,25 +1,31 @@
 #include "rtpbuilder/RTPPacketizer.hpp"
+#include <boost/asio.hpp>
+#include <boost/core/span.hpp>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <memory>
-#include <rtpbuilder/PCMReceiver.hpp>
-#include <rtpbuilder/PacketUtils.hpp>
-#include <rtpbuilder/packet.hpp>
-#include <boost/asio.hpp>
-#include <boost/core/span.hpp>
+#include "rtpbuilder/PCMReceiver.hpp"
+#include "rtpbuilder/PacketUtils.hpp"
+#include "rtpbuilder/packet.hpp"
 
-PCMReceiver::PCMReceiver(net::io_context &io, uint16_t localPort,
-                         const std::string &remoteIp, uint16_t remotePort)
-    : socket_(io, udp::endpoint(udp::v4(), localPort)),
-      packetizer_(/* payloadType */ 8, generate_ssrc(), SAMPLES_PER_FRAME),
-      transmitter_(io, remoteIp, remotePort), timer_(io) {
-  std::cout << "PCMReceiver created on port " << localPort << std::endl;
+PCMReceiver::PCMReceiver(net::io_context &io, uint16_t local_port,
+                         const std::string &remote_ip, uint16_t remote_port)
+    : io_(io), socket_(io, udp::endpoint(udp::v4(), local_port)),
+      packetizer_(8, generate_ssrc(), SAMPLES_PER_FRAME),
+      transmitter_(io, remote_ip, remote_port), timer_(io) {
+  std::cout << "[PCMReceiver] Created on port " << local_port << "\n";
+}
+PCMReceiver::PCMReceiver(net::io_context &io, udp::socket &&existing_socket,
+                         const std::string &remote_ip, uint16_t remote_port)
+    : io_(io), socket_(std::move(existing_socket)),
+      packetizer_(8, generate_ssrc(), SAMPLES_PER_FRAME),
+      transmitter_(io, remote_ip, remote_port), timer_(io) {
+  std::cout << "[PCMReceiver] Created with existing socket on port "
+            << socket_.local_endpoint().port() << "\n";
 }
 
-void PCMReceiver::start() {
-  doReceive();
-}
+void PCMReceiver::start() { doReceive(); }
 
 void PCMReceiver::stop() {
   std::cout << "PCMReceiver stopping...\n";
@@ -33,49 +39,56 @@ void PCMReceiver::stop() {
   }
 }
 
-void PCMReceiver::read_pcm_from_wav(std::filesystem::path path ,const std::string &filename) {
+void PCMReceiver::read_pcm_from_wav(const std::filesystem::path& path, const std::string& file_name) {
   pcmFile_ = std::make_unique<std::ifstream>(path, std::ios::binary);
 
   if (!pcmFile_->is_open()) {
-    std::cerr << "Failed to open PCM WAV file: " << filename << "\n";
-    
+    std::cerr << "Failed to open PCM WAV file: " << file_name << "\n";
+
     return;
   }
 
   pcmFile_->seekg(WAV_HEADER_SIZE, std::ios::beg);
-  std::cout << "Reading PCM from WAV file: " << filename << "\n";
+  std::cout << "Reading PCM from WAV file: " << file_name << "\n";
 
-  nextTick_ = std::chrono::steady_clock::now();
+  next_tick_ = std::chrono::steady_clock::now();
   readAndEncodeNextFrame();
   scheduleNextSend();
 }
 
 void PCMReceiver::readAndEncodeNextFrame() {
-  if (!pcmFile_ || !pcmFile_->is_open()) return;
+  if (!pcmFile_ || !pcmFile_->is_open())
+    return;
 
-  pcmFile_->read(reinterpret_cast<char *>(buffer_.data() + PacketUtils::HEADER_SIZE), FRAME_SIZE_BYTES);
+  pcmFile_->read(
+      reinterpret_cast<char *>(buffer_.data() + PacketUtils::HEADER_SIZE),
+      FRAME_SIZE_BYTES);
   std::streamsize bytesRead = pcmFile_->gcount();
   if (bytesRead <= 0) {
-    hasFrame_ = false;
+    has_frame_ = false;
     return;
   }
 
-  boost::span<const uint8_t> pcmSpan(buffer_.data() + PacketUtils::HEADER_SIZE, bytesRead);
-  pendingPacketSize_ = PacketUtils::packet2rtp(pcmSpan, packetizer_, buffer_);
-  hasFrame_ = pendingPacketSize_ > 0;
+  boost::span<const uint8_t> pcmSpan(buffer_.data() + PacketUtils::HEADER_SIZE,
+                                     bytesRead);
+  pending_packet_size_= PacketUtils::packet2rtp(pcmSpan, packetizer_, buffer_);
+  has_frame_ = pending_packet_size_ > 0;
 }
 
 void PCMReceiver::scheduleNextSend() {
-  nextTick_ += std::chrono::milliseconds(MS);
-  timer_.expires_at(nextTick_);
+  next_tick_ += std::chrono::milliseconds(MS);
+  timer_.expires_at(next_tick_);
   timer_.async_wait([this](const boost::system::error_code &ec) {
-    if (!ec) sendPreparedFrame();
+    if (!ec)
+      sendPreparedFrame();
   });
 }
 
 void PCMReceiver::sendPreparedFrame() {
-  if (hasFrame_) {
-    transmitter_.asyncSend(boost::span<const uint8_t>(buffer_.data(), pendingPacketSize_), pendingPacketSize_);
+  if (has_frame_) {
+    transmitter_.asyncSend(
+        boost::span<const uint8_t>(buffer_.data(), pending_packet_size_),
+        pending_packet_size_);
     readAndEncodeNextFrame();
   }
   scheduleNextSend();
@@ -83,8 +96,9 @@ void PCMReceiver::sendPreparedFrame() {
 
 void PCMReceiver::doReceive() {
   socket_.async_receive_from(
-      boost::asio::buffer(buffer_.data() + PacketUtils::HEADER_SIZE, PCM_SIZE * 2),
-      senderEndpoint_,
+      boost::asio::buffer(buffer_.data() + PacketUtils::HEADER_SIZE,
+                          PCM_SIZE * 2),
+      sender_endpoint_,
       [this](boost::system::error_code ec, std::size_t bytesReceived) {
         if (ec == boost::asio::error::operation_aborted) {
           std::cout << "Receive cancelled or stopped.\n";
@@ -97,15 +111,16 @@ void PCMReceiver::doReceive() {
           return;
         }
 
-        boost::span<const uint8_t> pcmData(buffer_.data() + PacketUtils::HEADER_SIZE, bytesReceived);
-        std::size_t pktLen = PacketUtils::packet2rtp(pcmData, packetizer_, buffer_);
+        boost::span<const uint8_t> pcmData(
+            buffer_.data() + PacketUtils::HEADER_SIZE, bytesReceived);
+        std::size_t pktLen =
+            PacketUtils::packet2rtp(pcmData, packetizer_, buffer_);
 
         if (pktLen > 0) {
-          transmitter_.asyncSend(boost::span<const uint8_t>(buffer_.data(), pktLen), pktLen);
+          transmitter_.asyncSend(
+              boost::span<const uint8_t>(buffer_.data(), pktLen), pktLen);
         }
 
         doReceive();
       });
 }
-
-
