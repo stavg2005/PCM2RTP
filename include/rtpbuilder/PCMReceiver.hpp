@@ -19,6 +19,7 @@ public:
     void stop();
     void read_pcm_from_wav(const std::filesystem::path& path, const std::string& file_name);
     uint16_t get_local_port() const;
+     ~PCMReceiver() noexcept;
 private:
     void readAndEncodeNextFrame();
     void scheduleNextSend();

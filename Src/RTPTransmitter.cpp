@@ -16,15 +16,38 @@ void RTPTransmitter::stop() {
   std::cout << "RTPTransmitter stopping...\n";
 
   if (socket_.is_open()) {
-    try {
-      socket_.cancel();
-    } catch (const std::exception &e) {
-      std::cerr << "Error canceling transmitter: " << e.what() << std::endl;
+    boost::system::error_code ec;
+    socket_.cancel(ec);
+    if (ec) {
+      std::cout << "Socket cancel error: " << ec.message() << "\n";
     }
+
+    // Don't close socket in stop() - let destructor handle it
+    // socket_.close(ec);
   }
 }
-
-void RTPTransmitter::asyncSend(boost::span< const uint8_t> buf, std::size_t size) {
+RTPTransmitter::~RTPTransmitter() noexcept {
+      try {
+        // Close the UDP socket safely
+        if (socket_.is_open()) {
+            boost::system::error_code ec;
+            
+            // Cancel any pending async operations
+            socket_.cancel(ec);
+            // Ignore any cancel errors during destruction
+            
+            // Close the socket
+            socket_.close(ec);
+            // Ignore any close errors during destruction
+        }
+        
+    } catch (...) {
+        // Never let any exception escape from a destructor
+        // This prevents std::terminate from being called
+    }
+}
+void RTPTransmitter::asyncSend(boost::span<const uint8_t> buf,
+                               std::size_t size) {
 
   socket_.async_send_to(
       boost::asio::buffer(buf,

@@ -1,9 +1,11 @@
+// SessionManager.cpp
 #include "rtpbuilder/PCMReceiver.hpp"
 #include <filesystem>
 #include <memory>
 #include <./RtpBuilder/SessionManager.hpp>
 #include <iostream>
 #include <algorithm>
+#include <thread>
 
 SessionManager::SessionManager(boost::asio::io_context& io,
                                uint16_t localPort,
@@ -25,11 +27,9 @@ void SessionManager::start_managed_session(std::filesystem::path path,
                                           std::function<void(uint64_t)> cleanup_callback) {
     std::cout << "SessionManager starting managed session " << session_id << "\n";
     
-    // Store management info
     session_id_ = session_id;
     cleanup_callback_ = std::move(cleanup_callback);
     
-    // Start the actual transmission
     try {
         start(path, file_name);
     } catch (const std::exception& e) {
@@ -38,7 +38,6 @@ void SessionManager::start_managed_session(std::filesystem::path path,
         return;
     }
     
-    // Set up auto-completion timer
     setup_completion_timer(path);
 }
 
@@ -54,56 +53,48 @@ void SessionManager::stop() {
     }
     std::cout << "...\n";
     
-    // Cancel timer first
     if (completion_timer_) {
-        completion_timer_->cancel();
+        try {
+            completion_timer_->cancel();
+        } catch (const std::exception& e) {
+            std::cout << "Timer cancel error: " << e.what() << "\n";
+        }
     }
     
-    // Stop receiver
     receiver_.stop();
     
     std::cout << "SessionManager shutdown complete.\n";
 }
 
 uint16_t SessionManager::get_local_port() const {
-    
     return receiver_.get_local_port();
-    
-
 }
 
 void SessionManager::setup_completion_timer(const std::filesystem::path& path) {
     try {
-        // Calculate expected duration with 20% buffer
         auto duration_ms = calculate_transmission_duration(path) * 120 / 100;
         
         std::cout << "Session " << *session_id_ << " expected to complete in " 
                   << duration_ms << "ms\n";
         
-        // Create and configure timer
         completion_timer_ = std::make_unique<boost::asio::steady_timer>(io_);
         completion_timer_->expires_after(std::chrono::milliseconds(duration_ms));
         
-        // Set up async completion callback
+        // Use weak_ptr to avoid circular reference issues
         completion_timer_->async_wait(
-            [self = shared_from_this()](const boost::system::error_code& ec) {
-                try {
-                    if (ec) {
-                        if (ec != boost::asio::error::operation_aborted) {
-                            std::cout << "Timer error for session " << *self->session_id_
-                                      << ": " << ec.message() << "\n";
-                        }
-                        return;
+            [weak_self = std::weak_ptr<SessionManager>(shared_from_this())](const boost::system::error_code& ec) {
+                if (ec) {
+                    if (ec != boost::asio::error::operation_aborted) {
+                        std::cout << "Timer error: " << ec.message() << "\n";
                     }
-                    
-                    std::cout << "Session " << *self->session_id_ 
-                              << " completed (timer-based)\n";
-                    self->cleanup();
-                    
-                } catch (const std::exception& e) {
-                    std::cout << "Exception in timer callback for session " 
-                              << *self->session_id_ << ": " << e.what() << "\n";
+                    return;
                 }
+                
+                auto self = weak_self.lock();
+                if (!self) return; // SessionManager already destroyed
+                
+                std::cout << "Session " << *self->session_id_ << " completed (timer-based)\n";
+                self->cleanup();
             });
             
     } catch (const std::exception& e) {
@@ -120,22 +111,33 @@ void SessionManager::cleanup() {
         }
         std::cout << "\n";
         
-        // Stop everything
         stop();
         
-        // Reset timer
         if (completion_timer_) {
             completion_timer_.reset();
         }
         
-        // Notify ActiveSessions for cleanup
+        // Execute callback in separate thread to avoid Boost.Asio cleanup conflicts
         if (session_id_ && cleanup_callback_) {
-            cleanup_callback_(*session_id_);
+            auto session_id_copy = *session_id_;
+            auto callback = std::move(cleanup_callback_);
+            
+            // Clear state BEFORE calling callback
+            session_id_.reset();
+            cleanup_callback_ = nullptr;
+            
+            std::thread cleanup_thread([callback = std::move(callback), session_id_copy]() {
+                try {
+                    callback(session_id_copy);
+                } catch (const std::exception& e) {
+                    std::cout << "Exception in cleanup callback: " << e.what() << "\n";
+                } catch (...) {
+                    std::cout << "Unknown exception in cleanup callback\n";
+                }
+            });
+            
+            cleanup_thread.detach();
         }
-        
-        // Clear management state
-        session_id_.reset();
-        cleanup_callback_ = nullptr;
         
         std::cout << "Cleanup complete for managed session\n";
         
@@ -152,7 +154,7 @@ uint64_t SessionManager::calculate_transmission_duration(const std::filesystem::
         }
         
         auto file_size = std::filesystem::file_size(wav_path);
-        std::cout << "File size for " << wav_path << ": " << file_size << " bytes\n";
+        std::cout << "File size for \"" << wav_path << "\": " << file_size << " bytes\n";
         
         if (file_size <= 44) {
             std::cerr << "Invalid WAV file size for " << wav_path << ": "
@@ -168,7 +170,7 @@ uint64_t SessionManager::calculate_transmission_duration(const std::filesystem::
         auto num_packets = (data_size + FRAME_SIZE_BYTES - 1) / FRAME_SIZE_BYTES;
         auto duration_ms = num_packets * MS_PER_PACKET;
         
-        std::cout << "Calculated duration for " << wav_path << ": " << duration_ms
+        std::cout << "Calculated duration for \"" << wav_path << "\": " << duration_ms
                   << "ms (" << num_packets << " packets)\n";
         
         return std::max<uint64_t>(1000, duration_ms); // Minimum 1 second
@@ -176,6 +178,6 @@ uint64_t SessionManager::calculate_transmission_duration(const std::filesystem::
     } catch (const std::exception& e) {
         std::cerr << "Error calculating duration for " << wav_path << ": "
                   << e.what() << "\n";
-        throw; // Rethrow to handle in caller
+        throw;
     }
 }
