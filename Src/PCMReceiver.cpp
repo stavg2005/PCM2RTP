@@ -1,6 +1,7 @@
 #include "rtpbuilder/RTPPacketizer.hpp"
 #include <boost/asio.hpp>
 #include <boost/core/span.hpp>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -75,6 +76,9 @@ void PCMReceiver::readAndEncodeNextFrame() {
   has_frame_ = pending_packet_size_ > 0;
 }
 
+uint16_t PCMReceiver::get_local_port() const{
+  return socket_.local_endpoint().port();
+}
 void PCMReceiver::scheduleNextSend() {
   next_tick_ += std::chrono::milliseconds(MS);
   timer_.expires_at(next_tick_);
